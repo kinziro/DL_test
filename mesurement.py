@@ -46,7 +46,7 @@ class MyRemodelendEnv(gym.Wrapper):
             self.status_name.append('{}_p'.format(jnt.name))
             self.status_name.append('{}_v'.format(jnt.name))
 
-        self.status_name.extend(['feet_contact_0', 'feet_contact_1'])
+        self.status_name.extend(['feet_contact_0_r', 'feet_contact_1_l'])
         np.save('./humanoid_labels', np.array(self.status_name))
 
     def step(self, a):
@@ -103,24 +103,30 @@ if validation:
     model = PPO2.load('{}ppo2_model'.format(savedir))
     from gym import wrappers
 
+    video_path = '{}video'.format(plotdir)
+    wrap_env = wrappers.Monitor(ori_env, video_path, force=True)
+
     done = False
     #obs = env.reset()
-    obs = test_env.reset()
+    #obs = test_env.reset()
+    obs = wrap_env.reset()
 
     for step in range(step_len):
+        if step % 10 == 0: print("step :", step)
         if done:
             time.sleep(1)
-            o = test_env.reset()
+            o = wrap_env.reset()
             break
 
         action, _states = model.predict(obs)
-        obs, rewards, done, info = test_env.step(action)
+        obs, rewards, done, info = wrap_env.step(action)
 
         if data is None:
             data = np.array(obs).reshape(-1, 1)
         else:
             data = np.hstack([data, np.array(obs).reshape(-1, 1)])
-        print(step, obs.shape, data.shape)
+        #print(step, obs.shape, data.shape)
+    wrap_env.close()
 
 
     labels = np.load('./humanoid_labels.npy')
@@ -137,8 +143,9 @@ if validation:
 
 
     fig_num = 7
-    x = list(range(data.shape[1]))
-    fig = plt.figure(figsize=(len(x)/20, fig_num*2))
+    x = np.arange(data.shape[1])*0.03
+    plt.clf()
+    fig = plt.figure(figsize=(len(x)/20, fig_num*2.5))
 
     title = 'angle'
     plt.title(title)
@@ -201,6 +208,8 @@ if validation:
 
 
 env.close()
+test_env.close()
+ori_env.close()
 
 #print(starttime)
 #print(endtime)
