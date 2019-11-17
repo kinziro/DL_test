@@ -47,7 +47,9 @@ class MyRemodelendEnv(gym.Wrapper):
             self.status_name.append('{}_v'.format(jnt.name))
 
         self.status_name.extend(['feet_contact_0_r', 'feet_contact_1_l'])
-        np.save('./humanoid_labels', np.array(self.status_name))
+        np.save('./labels', np.array(self.status_name))
+
+        self.origin_state = None
 
     def step(self, a):
         '''
@@ -57,10 +59,37 @@ class MyRemodelendEnv(gym.Wrapper):
             if callable(getattr(instance, str(method))):
                 print(method)
         '''
+        '''
+        joints = self.env.ordered_joints
+        aa = joints[0].current_position()
+        bb = joints[0].current_relative_position()
+        #lowerLimit = joints[0].lowerLimit
+        #upperLimit = joints[0].upperLimit
+        #pos_mid = 0.5 * (lowerLimit + upperLimit)
 
-        #origin_value = np.array([j2.current_position() for j2 in self.env.ordered_joints], dtype=np.float32).flatten()
+        origin_value = np.array([j2.current_position() for j2 in self.env.ordered_joints], dtype=np.float32).flatten()
+        origin_value_relative = np.array([j2.current_relative_position() for j2 in self.env.ordered_joints], dtype=np.float32).flatten()
+        angle_value = origin_value[0::2]
+        norm_value = []
+        for i in range(len(angle_value)):
+            if i == 2 or i == 5:
+                lowerLimit = -45
+                upperLimit = 45
+            else:
+                lowerLimit = -150
+                upperLimit = 0
+            pos_mid = 0.5 * (lowerLimit + upperLimit)
+            norm_value.append(2 * (angle_value[i] - pos_mid) / (upperLimit - lowerLimit))
+        print(origin_value[0::2])
+        print(origin_value_relative[0::2])
+        print(norm_value)
         #origin_value = [0]*34
+        '''
+        origin_value = np.array([j2.current_position() for j2 in self.env.ordered_joints], dtype=np.float32).flatten()
         obs, reward, terminal, info = self.env.step(a)
+        a = origin_value[0::2].reshape(1, -1)
+        b = obs[20:].reshape(1, -1)
+        self.origin_state = np.concatenate([origin_value[0::2].reshape(-1, 1), obs[20:].reshape(-1, 1)], axis=0)
 
         return obs, reward, terminal, info
 
@@ -73,7 +102,8 @@ class MyRemodelendEnv(gym.Wrapper):
 train = False       # 学習をするかどうか
 validation = True   # 学習結果を使って評価をするかどうか
 
-env_name = 'RoboschoolHumanoid-v1'
+#env_name = 'RoboschoolHumanoid-v1'
+env_name = 'RoboschoolWalker2d-v1'
 num_cpu = 1         # 学習に使用するCPU数
 learn_timesteps = 10**3     # 学習タイムステップ
 
@@ -84,27 +114,28 @@ env.reset()
 #env.render()
 #time.sleep(5)
 
-savedir = './stable_baselines2/{}/'.format(env_name)
+savedir = './stable_baselines/{}/'.format(env_name)
 #logdir = '{}tensorboard_log/'.format(savedir)
 #os.makedirs(savedir, exist_ok=True)
 
 
-env_name = 'RoboschoolHumanoid-v1'
+#env_name = 'RoboschoolHumanoid-v1'
 test_env = gym.make(env_name)
 test_env = MyRemodelendEnv(test_env)
-test_env = DummyVecEnv([lambda: test_env])
+#test_env = DummyVecEnv([lambda: test_env])
 
 plotdir = './testplot/'
 os.makedirs(plotdir, exist_ok=True)
 data = None
-step_len = 1000
+step_len = 300
 # 学習結果の確認
 if validation:
     model = PPO2.load('{}ppo2_model'.format(savedir))
     from gym import wrappers
 
     video_path = '{}video'.format(plotdir)
-    wrap_env = wrappers.Monitor(ori_env, video_path, force=True)
+    wrap_env = wrappers.Monitor(test_env, video_path, force=True)
+    #wrap_env = wrappers.Monitor(ori_env, video_path, force=True)
 
     done = False
     #obs = env.reset()
@@ -115,35 +146,84 @@ if validation:
         if step % 10 == 0: print("step :", step)
         if done:
             time.sleep(1)
+            #o = test_env.reset()
             o = wrap_env.reset()
             break
 
         action, _states = model.predict(obs)
+        #obs, rewards, done, info = test_env.step(action)
         obs, rewards, done, info = wrap_env.step(action)
 
+        ori_state = wrap_env.origin_state
+        #ori_state = test_env.envs[0].origin_state
+        if data is None:
+            data = np.array(ori_state).reshape(-1, 1)
+        else:
+            data = np.hstack([data, np.array(ori_state).reshape(-1, 1)])
+
+        if 100 < step < 105:
+            print('--------')
+            print(obs[8:20:2])
+            print(ori_state.T)
+
+        '''
         if data is None:
             data = np.array(obs).reshape(-1, 1)
         else:
             data = np.hstack([data, np.array(obs).reshape(-1, 1)])
+        '''
         #print(step, obs.shape, data.shape)
-    wrap_env.close()
+    #wrap_env.close()
+    print(data.shape)
 
+    np.save('./walker2d_status', np.array(data))
+    #np.save('./humanoid_status', np.array(data))
+    labels = np.load('./labels.npy')
 
-    labels = np.load('./humanoid_labels.npy')
+    fig_num = 8
+    x = np.arange(data.shape[1])*0.0166
+    plt.clf()
+    fig = plt.figure(figsize=(len(x)/20, fig_num*2.5))
+
+    title = 'angle'
+    plt.title(title)
+    ax1 = fig.add_subplot(fig_num, 1, 1)
+    ax1.plot(x, data[0, :])
+    ax1.grid()
+    ax1.set_ylabel(labels[8])
+    ax2 = fig.add_subplot(fig_num, 1, 2)
+    ax2.plot(x, data[1, :])
+    ax2.grid()
+    ax2.set_ylabel(labels[10])
+    ax3 = fig.add_subplot(fig_num, 1, 3)
+    ax3.plot(x, data[2, :])
+    ax3.grid()
+    ax3.set_ylabel(labels[12])
+    ax4 = fig.add_subplot(fig_num, 1, 4)
+    ax4.plot(x, data[3, :])
+    ax4.grid()
+    ax4.set_ylabel(labels[14])
+    ax5 = fig.add_subplot(fig_num, 1, 5)
+    ax5.plot(x, data[4, :])
+    ax5.grid()
+    ax5.set_ylabel(labels[16])
+    ax6 = fig.add_subplot(fig_num, 1, 6)
+    ax6.plot(x, data[5, :])
+    ax6.grid()
+    ax6.set_ylabel(labels[18])
+    ax7 = fig.add_subplot(fig_num, 1, 7)
+    ax7.plot(x, data[6, :])
+    ax7.grid()
+    ax7.set_ylabel(labels[20])
+    ax8 = fig.add_subplot(fig_num, 1, 8)
+    ax8.plot(x, data[7, :])
+    ax8.grid()
+    ax8.set_ylabel(labels[21])
+    plt.savefig('{}{}.png'.format(plotdir, title))
 
     '''
-    for i in range(data.shape[0]):
-        plt.clf()
-        plt.plot(data[i, :])
-        plt.grid()
-        title = info[0][i]
-        plt.title(title)
-        plt.savefig('{}{}.png'.format(plotdir, title))
-    '''
-
-
     fig_num = 7
-    x = np.arange(data.shape[1])*0.03
+    x = np.arange(data.shape[1])*0.015
     plt.clf()
     fig = plt.figure(figsize=(len(x)/20, fig_num*2.5))
 
@@ -178,32 +258,6 @@ if validation:
     ax7.grid()
     ax7.set_ylabel(labels[43])
     plt.savefig('{}{}.png'.format(plotdir, title))
-
-
-    '''
-    data = info[0]
-
-    fig = plt.figure()
-    ax = Axes3D(fig)
-
-    ax.set_xlabel(('X'))
-    ax.set_xlabel(('Y'))
-    ax.set_xlabel(('Z'))
-
-    print(type(data))
-    print(len(data))
-    print(type(data[12]))
-    print(type(data[10]))
-    print(type(data[8]))
-    abdomen = [data[4]], [data[2]], [data[0]]
-    r_hip = [data[6]], [data[10]], [data[8]]
-    l_hip = [data[14]], [data[18]], [data[16]]
-    ax.plot([data[4]], [data[2]], [data[0]], marker='o', label='abdomen')
-    ax.plot([data[6]], [data[10]], [data[8]], marker='x', label='r_hip')
-    ax.plot([data[14]], [data[18]], [data[16]], marker='+', label='l_hip')
-    ax.legend()
-
-    plt.show()
     '''
 
 
