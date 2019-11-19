@@ -1,22 +1,25 @@
 import numpy as np
-import gym, roboschool
+# import gym, roboschool
+import gym, pybullet_envs
 import os
 import time
 from datetime import datetime
 from OpenGL import GLU
-
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.common import set_global_seeds
 from stable_baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines.results_plotter import load_results, ts2xy
 from stable_baselines import PPO2
-
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 # tensorflow gpu 設定
-#import tensorflow as tf
-#tf.Session(config=tf.ConfigProto(device_count = {'GPU': 2}))
+# import tensorflow as tf
+# tf.Session(config=tf.ConfigProto(device_count = {'GPU': 2}))
+
+from pybullet_envs.robot_bases import Joint, BodyPart
+import pybullet
+import pybullet_data
 
 
 def make_env(env_name, rank, seed=0):
@@ -41,15 +44,64 @@ class MyRemodelendEnv(gym.Wrapper):
         self.env.reset()
         self.status_name = ['z-self.initial_z', 'np.sin_self.angel_to_target', 'np.cos_self.angel_to_target',
                             '0.3vx', '0.3vy', '0.3vz', 'r', 'p']
-
         for jnt in self.env.ordered_joints:
-            self.status_name.append('{}_p'.format(jnt.name))
-            self.status_name.append('{}_v'.format(jnt.name))
+            self.status_name.append('{}_p'.format(jnt.joint_name))
+            self.status_name.append('{}_v'.format(jnt.joint_name))
 
         self.status_name.extend(['feet_contact_0_r', 'feet_contact_1_l'])
         np.save('./labels', np.array(self.status_name))
-
         self.origin_state = None
+
+        # 各座標取得用のインスタンスを格納
+        self.parts = {}
+        self.right_bodies_name = ['torso', 'thigh', 'leg', 'foot']
+        self.left_bodies_name = ['torso', 'thigh_left', 'leg_left', 'foot_left']
+        self.right_joints_name = ['thigh_joint', 'leg_joint', 'foot_joint']
+        self.left_joints_name = ['thigh_left_joint', 'leg_left_joint', 'foot_left_joint']
+        self.right_parts_name = ['torso', 'thigh_joint', 'thigh', 'leg_joint', 'leg',
+                                 'foot_joint', 'foot']
+        self.left_parts_name = ['torso', 'thigh_left_joint', 'thigh_left', 'leg_left_joint', 'leg_left',
+                                'foot_left_joint', 'foot_left']
+        self.bodies_name = ['torso', 'thigh', 'leg', 'foot', 'torso', 'thigh_left', 'leg_left', 'foot_left']
+        self.joints_name = ['thigh_joint', 'leg_joint', 'foot_joint',
+                            'thigh_left_joint', 'leg_left_joint', 'foot_left_joint']
+
+        for j in range(self.env.env._p.getNumJoints(1)):
+            jointInfo = self.env.env._p.getJointInfo(1, j)
+            joint_name = jointInfo[1].decode("utf8")
+            part_name = jointInfo[12].decode("utf8")
+
+            if part_name in self.bodies_name:
+                self.parts[part_name] = self.env.env.parts[part_name]
+            if joint_name in self.joints_name:
+                self.parts[joint_name] = self.env.env.parts[part_name]
+
+    def get_right_parts_posi(self):
+        '''
+        右のPartsの座標をshape(3, part数)で返す
+
+        :return:
+        '''
+        d = []
+
+        for name in self.right_parts_name:
+            d.append(self.parts[name].current_position())
+
+        return np.array(d).T
+
+    def get_left_parts_posi(self):
+
+        '''
+        左のPartsの座標をshape(3, part数)で返す
+
+        :return:
+        '''
+        d = []
+
+        for name in self.left_parts_name:
+            d.append(self.parts[name].current_position())
+
+        return np.array(d).T
 
     def step(self, a):
         '''
@@ -59,123 +111,108 @@ class MyRemodelendEnv(gym.Wrapper):
             if callable(getattr(instance, str(method))):
                 print(method)
         '''
-        '''
-        joints = self.env.ordered_joints
-        aa = joints[0].current_position()
-        bb = joints[0].current_relative_position()
-        #lowerLimit = joints[0].lowerLimit
-        #upperLimit = joints[0].upperLimit
-        #pos_mid = 0.5 * (lowerLimit + upperLimit)
-
-        origin_value = np.array([j2.current_position() for j2 in self.env.ordered_joints], dtype=np.float32).flatten()
-        origin_value_relative = np.array([j2.current_relative_position() for j2 in self.env.ordered_joints], dtype=np.float32).flatten()
-        angle_value = origin_value[0::2]
-        norm_value = []
-        for i in range(len(angle_value)):
-            if i == 2 or i == 5:
-                lowerLimit = -45
-                upperLimit = 45
-            else:
-                lowerLimit = -150
-                upperLimit = 0
-            pos_mid = 0.5 * (lowerLimit + upperLimit)
-            norm_value.append(2 * (angle_value[i] - pos_mid) / (upperLimit - lowerLimit))
-        print(origin_value[0::2])
-        print(origin_value_relative[0::2])
-        print(norm_value)
-        #origin_value = [0]*34
-        '''
-        origin_value = np.array([j2.current_position() for j2 in self.env.ordered_joints], dtype=np.float32).flatten()
+        # origin_value = np.array([j2.current_position() for j2 in self.env.ordered_joints], dtype=np.float32).flatten()
         obs, reward, terminal, info = self.env.step(a)
-        a = origin_value[0::2].reshape(1, -1)
-        b = obs[20:].reshape(1, -1)
-        self.origin_state = np.concatenate([origin_value[0::2].reshape(-1, 1), obs[20:].reshape(-1, 1)], axis=0)
+        # self.origin_state = np.concatenate([origin_value[0::2].reshape(-1, 1), obs[20:].reshape(-1, 1)], axis=0)
 
         return obs, reward, terminal, info
 
-
-#import myenv
-#test_env = gym.make('myhumanoid-v0')
-
-
 # 学習設定
-train = False       # 学習をするかどうか
-validation = True   # 学習結果を使って評価をするかどうか
+train = False  # 学習をするかどうか
+validation = True  # 学習結果を使って評価をするかどうか
 
-#env_name = 'RoboschoolHumanoid-v1'
-env_name = 'RoboschoolWalker2d-v1'
-num_cpu = 1         # 学習に使用するCPU数
-learn_timesteps = 10**3     # 学習タイムステップ
+# env_name = 'RoboschoolHumanoid-v1'
+# env_name = 'RoboschoolWalker2d-v1'
+env_name = 'Walker2DBulletEnv-v0'
 
+# num_cpu = 1         # 学習に使用するCPU数
 ori_env = gym.make(env_name)
 env = DummyVecEnv([lambda: ori_env])
-#env = SubprocVecEnv([make_env(env_name, i) for i in range(num_cpu)])
+# env = SubprocVecEnv([make_env(env_name, i) for i in range(num_cpu)])
+
 env.reset()
-#env.render()
-#time.sleep(5)
-
 savedir = './stable_baselines/{}/'.format(env_name)
-#logdir = '{}tensorboard_log/'.format(savedir)
-#os.makedirs(savedir, exist_ok=True)
 
-
-#env_name = 'RoboschoolHumanoid-v1'
 test_env = gym.make(env_name)
 test_env = MyRemodelendEnv(test_env)
-#test_env = DummyVecEnv([lambda: test_env])
+# test_env = DummyVecEnv([lambda: test_env])
 
 plotdir = './testplot/'
 os.makedirs(plotdir, exist_ok=True)
+
 data = None
-step_len = 300
+right_x = None
+right_z = None
+left_x = None
+left_z = None
+
+step_len = 500
 # 学習結果の確認
 if validation:
     model = PPO2.load('{}ppo2_model'.format(savedir))
     from gym import wrappers
-
     video_path = '{}video'.format(plotdir)
     wrap_env = wrappers.Monitor(test_env, video_path, force=True)
-    #wrap_env = wrappers.Monitor(ori_env, video_path, force=True)
+    # wrap_env = wrappers.Monitor(ori_env, video_path, force=True)
 
     done = False
-    #obs = env.reset()
-    #obs = test_env.reset()
+    # obs = env.reset()
+    # obs = test_env.reset()
     obs = wrap_env.reset()
 
     for step in range(step_len):
         if step % 10 == 0: print("step :", step)
         if done:
             time.sleep(1)
-            #o = test_env.reset()
+            # o = test_env.reset()
             o = wrap_env.reset()
+
             break
 
         action, _states = model.predict(obs)
-        #obs, rewards, done, info = test_env.step(action)
+        # obs, rewards, done, info = test_env.step(action)
         obs, rewards, done, info = wrap_env.step(action)
 
-        ori_state = wrap_env.origin_state
+        '''
+        ori_state = test_env.origin_state
         #ori_state = test_env.envs[0].origin_state
+        #ori_state = wrap_env.origin_state
+
         if data is None:
             data = np.array(ori_state).reshape(-1, 1)
         else:
             data = np.hstack([data, np.array(ori_state).reshape(-1, 1)])
-
-        if 100 < step < 105:
-            print('--------')
-            print(obs[8:20:2])
-            print(ori_state.T)
-
         '''
-        if data is None:
-            data = np.array(obs).reshape(-1, 1)
-        else:
-            data = np.hstack([data, np.array(obs).reshape(-1, 1)])
-        '''
-        #print(step, obs.shape, data.shape)
-    #wrap_env.close()
-    print(data.shape)
 
+        if step % 20 == 0:
+            body_posi = test_env.get_right_parts_posi()
+            body_posi_l = test_env.get_left_parts_posi()
+            # body_posi = test_env.get_right_parts_posi()
+            # body_posi_l = test_env.get_left_parts_posi()
+
+            if right_x is None:
+                right_x = np.array(body_posi[0, :]).reshape(-1, 1)
+                right_z = np.array(body_posi[2, :]).reshape(-1, 1)
+                left_x = np.array(body_posi_l[0, :]).reshape(-1, 1)
+                left_z = np.array(body_posi_l[2, :]).reshape(-1, 1)
+            else:
+                right_x = np.hstack([right_x, np.array(body_posi[0, :]).reshape(-1, 1)])
+                right_z = np.hstack([right_z, np.array(body_posi[2, :]).reshape(-1, 1)])
+                left_x = np.hstack([left_x, np.array(body_posi_l[0, :]).reshape(-1, 1)])
+                left_z = np.hstack([left_z, np.array(body_posi_l[2, :]).reshape(-1, 1)])
+
+        # print(step, obs.shape, data.shape)
+    wrap_env.close()
+    fig = plt.figure(figsize=(10, 2))
+
+    for i in range(right_x.shape[1]):
+        plt.plot(left_x[:, i], left_z[:, i], marker='x')
+        plt.plot(right_x[:, i], right_z[:, i], marker='o')
+    plt.grid()
+    title = 'walker'
+    plt.savefig('{}{}.png'.format(plotdir, title))
+
+    '''
     np.save('./walker2d_status', np.array(data))
     #np.save('./humanoid_status', np.array(data))
     labels = np.load('./labels.npy')
@@ -183,6 +220,7 @@ if validation:
     fig_num = 8
     x = np.arange(data.shape[1])*0.0166
     plt.clf()
+
     fig = plt.figure(figsize=(len(x)/20, fig_num*2.5))
 
     title = 'angle'
@@ -222,48 +260,10 @@ if validation:
     plt.savefig('{}{}.png'.format(plotdir, title))
 
     '''
-    fig_num = 7
-    x = np.arange(data.shape[1])*0.015
-    plt.clf()
-    fig = plt.figure(figsize=(len(x)/20, fig_num*2.5))
-
-    title = 'angle'
-    plt.title(title)
-    ax1 = fig.add_subplot(fig_num, 1, 1)
-    ax1.plot(x, data[10, :])
-    ax1.grid()
-    ax1.set_ylabel(labels[10])
-    ax2 = fig.add_subplot(fig_num, 1, 2)
-    ax2.plot(x, data[18, :])
-    ax2.grid()
-    ax2.set_ylabel(labels[18])
-    ax3 = fig.add_subplot(fig_num, 1, 3)
-    ax3.plot(x, data[20, :])
-    ax3.grid()
-    ax3.set_ylabel(labels[20])
-    ax4 = fig.add_subplot(fig_num, 1, 4)
-    ax4.plot(x, data[26, :])
-    ax4.grid()
-    ax4.set_ylabel(labels[26])
-    ax5 = fig.add_subplot(fig_num, 1, 5)
-    ax5.plot(x, data[28, :])
-    ax5.grid()
-    ax5.set_ylabel(labels[28])
-    ax6 = fig.add_subplot(fig_num, 1, 6)
-    ax6.plot(x, data[42, :])
-    ax6.grid()
-    ax6.set_ylabel(labels[42])
-    ax7 = fig.add_subplot(fig_num, 1, 7)
-    ax7.plot(x, data[43, :])
-    ax7.grid()
-    ax7.set_ylabel(labels[43])
-    plt.savefig('{}{}.png'.format(plotdir, title))
-    '''
-
 
 env.close()
 test_env.close()
 ori_env.close()
 
-#print(starttime)
-#print(endtime)
+# print(starttime)
+# print(endtime)
