@@ -35,15 +35,18 @@ def make_env(env_name, rank, seed=0):
         env.seed(seed + rank)
         return env
     set_global_seeds(seed)
+
     return _init
 
 
 class MyRemodelendEnv(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
+
         self.env.reset()
         self.status_name = ['z-self.initial_z', 'np.sin_self.angel_to_target', 'np.cos_self.angel_to_target',
                             '0.3vx', '0.3vy', '0.3vz', 'r', 'p']
+
         for jnt in self.env.ordered_joints:
             self.status_name.append('{}_p'.format(jnt.joint_name))
             self.status_name.append('{}_v'.format(jnt.joint_name))
@@ -54,17 +57,24 @@ class MyRemodelendEnv(gym.Wrapper):
 
         # 各座標取得用のインスタンスを格納
         self.parts = {}
+
         self.right_bodies_name = ['torso', 'thigh', 'leg', 'foot']
         self.left_bodies_name = ['torso', 'thigh_left', 'leg_left', 'foot_left']
         self.right_joints_name = ['thigh_joint', 'leg_joint', 'foot_joint']
         self.left_joints_name = ['thigh_left_joint', 'leg_left_joint', 'foot_left_joint']
         self.right_parts_name = ['torso', 'thigh_joint', 'thigh', 'leg_joint', 'leg',
                                  'foot_joint', 'foot']
+
         self.left_parts_name = ['torso', 'thigh_left_joint', 'thigh_left', 'leg_left_joint', 'leg_left',
                                 'foot_left_joint', 'foot_left']
         self.bodies_name = ['torso', 'thigh', 'leg', 'foot', 'torso', 'thigh_left', 'leg_left', 'foot_left']
+
         self.joints_name = ['thigh_joint', 'leg_joint', 'foot_joint',
                             'thigh_left_joint', 'leg_left_joint', 'foot_left_joint']
+
+        self.parts_name = ['torso', 'thigh_joint', 'thigh', 'leg_joint', 'leg', 'foot_joint', 'foot',
+                           'thigh_left_joint', 'thigh_left', 'leg_left_joint', 'leg_left', 'foot_left_joint',
+                           'foot_left']
 
         for j in range(self.env.env._p.getNumJoints(1)):
             jointInfo = self.env.env._p.getJointInfo(1, j)
@@ -83,27 +93,92 @@ class MyRemodelendEnv(gym.Wrapper):
         :return:
         '''
         d = []
-
         for name in self.right_parts_name:
             d.append(self.parts[name].current_position())
 
         return np.array(d).T
 
     def get_left_parts_posi(self):
-
         '''
         左のPartsの座標をshape(3, part数)で返す
 
         :return:
         '''
-        d = []
 
+        d = []
         for name in self.left_parts_name:
             d.append(self.parts[name].current_position())
 
         return np.array(d).T
 
+    def get_parts_posi(self):
+        '''
+        Partsの座標をshape(3, part数)で返す
+
+        :return:
+        '''
+        d = []
+        for name in self.parts_name:
+            d.append(self.parts[name].current_position())
+
+        return np.array(d).T
+
+    def get_motion_angle(self):
+        d = self.get_parts_posi()
+        d_dict = {}
+
+        for i in range(len(self.parts_name)):
+            d_dict[self.parts_name[i]] = [d[0, i], d[2, i]]
+
+        angles = []
+        angle_labels = ['foot_r', 'shank_r', 'thigh_r', 'thunk', 'foot_l', 'shank_l', 'thigh_l']
+        pairs = [['foot_joint', 'foot'], ['leg_joint', 'foot_joint'], ['thigh_joint', 'leg_joint'],
+                 ['torso', 'thigh_joint'],
+                 ['foot_left_joint', 'foot_left'], ['leg_left_joint', 'foot_left_joint'],
+                 ['thigh_left_joint', 'leg_left_joint']]
+
+        for l, p in zip(angle_labels, pairs):
+            if 'foot' in l:
+                angle = self.cal_angle(d_dict[p[0]], d_dict[p[1]], axis=0)
+            else:
+                angle = self.cal_angle(d_dict[p[0]], d_dict[p[1]], axis=1)
+            angles.append(angle)
+
+        return angles, angle_labels
+
+    def cal_angle(self, point1, point2, axis):
+        '''
+        引数の線分と垂直軸のなす角を計算して返す
+        '''
+        if axis == 1:
+            if point1[1] >= point2[1]:
+                point1_x = point1[0]
+                point1_y = point1[1]
+                point2_x = point2[0]
+                point2_y = point2[1]
+            else:
+                point1_x = point2[0]
+                point1_y = point2[1]
+                point2_x = point1[0]
+                point2_y = point1[1]
+            angle = np.arctan((point1_x - point2_x) / (point1_y - point2_y))
+
+        elif axis == 0:
+            if point1[0] >= point2[0]:
+                point1_x = point1[0]
+                point1_y = point1[1]
+                point2_x = point2[0]
+                point2_y = point2[1]
+            else:
+                point1_x = point2[0]
+                point1_y = point2[1]
+                point2_x = point1[0]
+                point2_y = point1[1]
+            angle = -1 * np.arctan((point1_y - point2_y) / (point1_x - point2_x))
+        return angle
+
     def step(self, a):
+
         '''
         instance = self.env.ordered_joints[0]
 
@@ -117,10 +192,10 @@ class MyRemodelendEnv(gym.Wrapper):
 
         return obs, reward, terminal, info
 
+
 # 学習設定
 train = False  # 学習をするかどうか
 validation = True  # 学習結果を使って評価をするかどうか
-
 # env_name = 'RoboschoolHumanoid-v1'
 # env_name = 'RoboschoolWalker2d-v1'
 env_name = 'Walker2DBulletEnv-v0'
@@ -132,21 +207,20 @@ env = DummyVecEnv([lambda: ori_env])
 
 env.reset()
 savedir = './stable_baselines/{}/'.format(env_name)
-
 test_env = gym.make(env_name)
 test_env = MyRemodelendEnv(test_env)
 # test_env = DummyVecEnv([lambda: test_env])
 
 plotdir = './testplot/'
 os.makedirs(plotdir, exist_ok=True)
-
 data = None
 right_x = None
 right_z = None
 left_x = None
 left_z = None
-
+angle_t = None
 step_len = 500
+
 # 学習結果の確認
 if validation:
     model = PPO2.load('{}ppo2_model'.format(savedir))
@@ -184,6 +258,12 @@ if validation:
             data = np.hstack([data, np.array(ori_state).reshape(-1, 1)])
         '''
 
+        angles, angle_labels = test_env.get_motion_angle()
+        if angle_t is None:
+            angle_t = np.array(angles).reshape(-1, 1)
+        else:
+            angle_t = np.hstack([angle_t, np.array(angles).reshape(-1, 1)])
+
         if step % 20 == 0:
             body_posi = test_env.get_right_parts_posi()
             body_posi_l = test_env.get_left_parts_posi()
@@ -201,15 +281,56 @@ if validation:
                 left_x = np.hstack([left_x, np.array(body_posi_l[0, :]).reshape(-1, 1)])
                 left_z = np.hstack([left_z, np.array(body_posi_l[2, :]).reshape(-1, 1)])
 
-        # print(step, obs.shape, data.shape)
     wrap_env.close()
-    fig = plt.figure(figsize=(10, 2))
 
+    # パーツの座標をプロット
+    fig = plt.figure(figsize=(10, 2))
     for i in range(right_x.shape[1]):
         plt.plot(left_x[:, i], left_z[:, i], marker='x')
         plt.plot(right_x[:, i], right_z[:, i], marker='o')
+
     plt.grid()
     title = 'walker'
+    plt.savefig('{}{}.png'.format(plotdir, title))
+    # np.save('./walker2d_status', np.array(data))
+    # np.save('./humanoid_status', np.array(data))
+    # labels = np.load('./labels.npy')
+
+    # 角度をプロット
+    fig_num = 7
+    x = np.arange(angle_t.shape[1]) * 0.0166
+    plt.clf()
+    fig = plt.figure(figsize=(len(x) / 20, fig_num * 2.5))
+    title = 'angle'
+    plt.title(title)
+    ax1 = fig.add_subplot(fig_num, 1, 1)
+    ax1.plot(x, angle_t[0, :])
+    ax1.grid()
+    ax1.set_ylabel(angle_labels[0])
+    ax2 = fig.add_subplot(fig_num, 1, 2)
+    ax2.plot(x, angle_t[1, :])
+    ax2.grid()
+    ax2.set_ylabel(angle_labels[1])
+    ax3 = fig.add_subplot(fig_num, 1, 3)
+    ax3.plot(x, angle_t[2, :])
+    ax3.grid()
+    ax3.set_ylabel(angle_labels[2])
+    ax4 = fig.add_subplot(fig_num, 1, 4)
+    ax4.plot(x, angle_t[3, :])
+    ax4.grid()
+    ax4.set_ylabel(angle_labels[3])
+    ax5 = fig.add_subplot(fig_num, 1, 5)
+    ax5.plot(x, angle_t[4, :])
+    ax5.grid()
+    ax5.set_ylabel(angle_labels[4])
+    ax6 = fig.add_subplot(fig_num, 1, 6)
+    ax6.plot(x, angle_t[5, :])
+    ax6.grid()
+    ax6.set_ylabel(angle_labels[5])
+    ax7 = fig.add_subplot(fig_num, 1, 7)
+    ax7.plot(x, angle_t[6, :])
+    ax7.grid()
+    ax7.set_ylabel(angle_labels[6])
     plt.savefig('{}{}.png'.format(plotdir, title))
 
     '''
@@ -222,7 +343,6 @@ if validation:
     plt.clf()
 
     fig = plt.figure(figsize=(len(x)/20, fig_num*2.5))
-
     title = 'angle'
     plt.title(title)
     ax1 = fig.add_subplot(fig_num, 1, 1)
@@ -257,8 +377,8 @@ if validation:
     ax8.plot(x, data[7, :])
     ax8.grid()
     ax8.set_ylabel(labels[21])
-    plt.savefig('{}{}.png'.format(plotdir, title))
 
+    plt.savefig('{}{}.png'.format(plotdir, title))
     '''
 
 env.close()
