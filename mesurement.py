@@ -258,11 +258,18 @@ if validation:
             data = np.hstack([data, np.array(ori_state).reshape(-1, 1)])
         '''
 
+        body_posi = test_env.get_right_parts_posi()
+        body_posi_l = test_env.get_left_parts_posi()
+
         angles, angle_labels = test_env.get_motion_angle()
+        angles.extend(obs[20:])
+        angles.extend(body_posi[2, 5:])
+        angles.extend(body_posi_l[2, 5:])
+        angles = np.array(angles).reshape(-1, 1)
         if angle_t is None:
-            angle_t = np.array(angles).reshape(-1, 1)
+            angle_t = angles
         else:
-            angle_t = np.hstack([angle_t, np.array(angles).reshape(-1, 1)])
+            angle_t = np.hstack([angle_t, angles])
 
         if step % 20 == 0:
             body_posi = test_env.get_right_parts_posi()
@@ -296,41 +303,23 @@ if validation:
     # np.save('./humanoid_status', np.array(data))
     # labels = np.load('./labels.npy')
 
+    np.save('{}angle_t'.format(plotdir), angle_t)
+    angle_labels.extend(['feet_contact_r', 'feet_contact_l', 'foot_joint_z', 'foot_z', 'foot_left_joint_z', 'foot_left_z'])
+
     # 角度をプロット
-    fig_num = 7
+    fig_num = 13
     x = np.arange(angle_t.shape[1]) * 0.0166
     plt.clf()
-    fig = plt.figure(figsize=(len(x) / 20, fig_num * 2.5))
+    fig = plt.figure(figsize=(len(x) / 20 + 5, fig_num * 2.5))
     title = 'angle'
-    plt.title(title)
-    ax1 = fig.add_subplot(fig_num, 1, 1)
-    ax1.plot(x, angle_t[0, :])
-    ax1.grid()
-    ax1.set_ylabel(angle_labels[0])
-    ax2 = fig.add_subplot(fig_num, 1, 2)
-    ax2.plot(x, angle_t[1, :])
-    ax2.grid()
-    ax2.set_ylabel(angle_labels[1])
-    ax3 = fig.add_subplot(fig_num, 1, 3)
-    ax3.plot(x, angle_t[2, :])
-    ax3.grid()
-    ax3.set_ylabel(angle_labels[2])
-    ax4 = fig.add_subplot(fig_num, 1, 4)
-    ax4.plot(x, angle_t[3, :])
-    ax4.grid()
-    ax4.set_ylabel(angle_labels[3])
-    ax5 = fig.add_subplot(fig_num, 1, 5)
-    ax5.plot(x, angle_t[4, :])
-    ax5.grid()
-    ax5.set_ylabel(angle_labels[4])
-    ax6 = fig.add_subplot(fig_num, 1, 6)
-    ax6.plot(x, angle_t[5, :])
-    ax6.grid()
-    ax6.set_ylabel(angle_labels[5])
-    ax7 = fig.add_subplot(fig_num, 1, 7)
-    ax7.plot(x, angle_t[6, :])
-    ax7.grid()
-    ax7.set_ylabel(angle_labels[6])
+    #plt.title(title)
+    fig.suptitle(title)
+    for i in range(fig_num):
+        ax1 = fig.add_subplot(fig_num, 1, i+1)
+        ax1.plot(x, angle_t[i, :])
+        ax1.grid()
+        ax1.set_ylabel(angle_labels[i])
+
     plt.savefig('{}{}.png'.format(plotdir, title))
 
     '''

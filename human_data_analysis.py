@@ -81,6 +81,7 @@ os.makedirs(plotdir, exist_ok=True)
 filepath = './human_data/ActorA_Walk.c3d'
 use_labels = ['TopHead', 'Root', 'RtFtHip', 'RtKnee', 'RtAnkle', 'RtHeel', 'RtToe', 'LtFtHip', 'LtKnee', 'LtAnkle', 'LtHeel', 'LtToe']
 cut_range = [0, 89]
+#cut_range = [11, 41]
 
 lab_to_ind = {}
 coordinates = {}
@@ -113,15 +114,16 @@ pairs = [['RtHeel', 'RtToe'], ['RtKnee', 'RtAnkle'], ['RtFtHip', 'RtKnee'],
          ['LtHeel', 'LtToe'], ['LtKnee', 'LtAnkle'], ['LtFtHip', 'LtKnee']]
 
 for k in coordinates:
-    coordinates[k] = coordinates[k][[0, 2], :]
+    coordinates[k] = coordinates[k][[1, 2], :]      # y, z軸だけ取り出し
 
 angle_t, _ = coordinate_to_angle(coord_dict=coordinates, pair_labels=pairs, angle_labels=angle_labels, axises=axises)
+np.save('{}angle_t'.format(plotdir), angle_t)
 
 # 角度をプロット
 fig_num = 7
 x = np.arange(angle_t.shape[1]) * 0.0166
 plt.clf()
-fig = plt.figure(figsize=(len(x) / 20, fig_num * 2.5))
+fig = plt.figure(figsize=(len(x) / 20 + 5, fig_num * 2.5))
 title = 'angle'
 #plt.title(title)
 fig.suptitle(title)
