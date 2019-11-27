@@ -30,140 +30,207 @@ class DataBox:
 
         return ret
 
-# 人間
-datadir = './testplot2/'
-h_cut_list = [[10, 41],
-              [40, 69]]
-human_d = np.load('{}angle_t.npy'.format(datadir))
+def get_walking_start(ts, ind1, ind2):
+    min_d1 = 100
+    min_d2 = 100
+    p_d1 = 100
+    p_d2 = 100
+    ignore = 10
+    ret = []
+    for i, (d1, d2) in enumerate(zip(ts[ind1, :], ts[ind2, :])):
+        if ignore > 0:
+            ignore -= 1
+            continue
 
-human_d_list = []
-for i, c in enumerate(h_cut_list):
-    ts = human_d[:7, c[0]:c[1]]
-    human_d_list.append(DataBox(ts, rank=4, name='agent_{}'.format(i+1)))
+        if d1 < min_d1:
+            min_d1 = d1
+        if d2 < min_d2:
+            min_d2 = d2
+
+        if p_d1 == min_d1 and p_d2 == min_d2:
+            if d1 > p_d1 or d2 > p_d2:
+                ret.append(i)
+                min_d1 = 100
+                min_d2 = 100
+                ignore = 10
+
+        p_d1 = d1
+        p_d2 = d2
+
+    return ret
+
+
+basedir = './synergy/'
+human_flag = True
+agent_flag = True
+num_of_synergy = 3
+
+# 人間
+if human_flag:
+    humanbasedir = '{}human/'.format(basedir)
+    hns = ['ActorA_Walk', 'ActorE_Walk', 'ActorG_Walk', 'ActorI_Walk']
+    hA_cut_list = [[10, 40],
+                  [40, 69]]
+    hE_cut_list = [[7, 31],
+                   [31, 54]]
+    hG_cut_list = [[10, 36],
+                   [36, 64]]
+    hI_cut_list = [[7, 31],
+                   [31, 54]]
+
+    human_d_list = []
+    for hn, h_cut_list in zip(hns, [hA_cut_list, hE_cut_list, hG_cut_list, hI_cut_list]):
+        human_d = np.load('{}{}/angle_t.npy'.format(humanbasedir, hn))
+
+        for i, c in enumerate(h_cut_list):
+            ts = human_d[:7, c[0]:c[1]]
+            human_d_list.append(DataBox(ts, rank=4, name='{}_{}'.format(hn, i+1)))
 
 # エージェント
-datadir = './testplot/'
-a_cut_list = [[110, 166],
-              [165, 219],
-              [218, 281],
-              [280, 339]]
-agent_d = np.load('{}angle_t.npy'.format(datadir))
+if agent_flag:
+    datadir = '{}agent/'.format(basedir)
+    a_cut_list = [[110, 166],
+                  [165, 219],
+                  [218, 281],
+                  [280, 339]]
+    agent_d = np.load('{}angle_t.npy'.format(datadir))
+    z_d = np.load('{}parts_z_t.npy'.format(datadir))
+    start_point = get_walking_start(ts=z_d, ind1=5, ind2=6)
 
-agent_r = agent_d[9, :]
-agent_d_list = []
-for i, c in enumerate(a_cut_list):
-    ts = agent_d[:7, c[0]:c[1]]
-    agent_d_list.append(DataBox(ts, rank=4, name='agent_{}'.format(i+1)))
+    agent_r = agent_d[9, :]
+    agent_d_list = []
+    for i, c in enumerate(a_cut_list):
+        ts = agent_d[:7, c[0]:c[1]]
+        agent_d_list.append(DataBox(ts, rank=4, name='agent_{}'.format(i+1)))
 
 
 # plot
 angle_labels = ['foot_r', 'shank_r', 'thigh_r', 'thunk', 'foot_l', 'shank_l', 'thigh_l']
 
-savedir = './synergy/'
+savedir = '{}kinematic/'.format(basedir)
 os.makedirs(savedir, exist_ok=True)
 
-# シナジー 空間
-fig_num = 3
-fig = plt.figure(figsize=(10, fig_num * 3))
-title = 'U'
-width = 0.3
-x_h = np.arange(len(angle_labels))
-x_a = np.arange(len(angle_labels)) + width
-fig.suptitle(title)
-for i in range(fig_num):
-    ax1 = fig.add_subplot(fig_num, 1, i+1)
-    ax1.bar(x_h, human_d_list[0].U[:, i], tick_label=angle_labels, width=width, align="center", label='human')
-    ax1.bar(x_a, agent_d_list[0].U[:, i], tick_label=angle_labels, width=width, align="center", label='agent')
-    ax1.grid()
-    ax1.legend()
-    ax1.set_ylabel(str(i))
-plt.savefig('{}{}.png'.format(savedir, title))
+# 人とエージェントの比較
+if human_flag and agent_flag:
+    # シナジー 空間
+    fig_num = 3
+    fig = plt.figure(figsize=(10, fig_num * 3))
+    title = 'U'
+    width = 0.3
+    x_h = np.arange(len(angle_labels))
+    x_a = np.arange(len(angle_labels)) + width
+    fig.suptitle(title)
+    for i in range(fig_num):
+        ax1 = fig.add_subplot(fig_num, 1, i+1)
+        ax1.bar(x_h, human_d_list[0].U[:, i], tick_label=angle_labels, width=width, align="center", label='human')
+        ax1.bar(x_a, agent_d_list[0].U[:, i], tick_label=angle_labels, width=width, align="center", label='agent')
+        ax1.grid()
+        ax1.legend()
+        ax1.set_ylabel(str(i))
+    plt.savefig('{}{}.png'.format(savedir, title))
 
-# シナジー 時間
-x_h = human_d_list[0].x
-x_a = agent_d_list[0].x
+    # シナジー 時間
+    x_h = human_d_list[0].x
+    x_a = agent_d_list[0].x
 
-fig_num = 3
-fig = plt.figure(figsize=(10, fig_num * 3))
-title = 'lambda_Vh'
-fig.suptitle(title)
-for i in range(fig_num):
-    ax1 = fig.add_subplot(fig_num, 1, i+1)
-    ax1.plot(x_h, human_d_list[0].lambda_Vh[i, :], label='human')
-    ax1.plot(x_a, agent_d_list[0].lambda_Vh[i, :], label='agent')
-    ax1.grid()
-    ax1.legend()
-    ax1.set_ylabel(str(i))
-plt.savefig('{}{}.png'.format(savedir, title))
+    fig_num = 3
+    fig = plt.figure(figsize=(10, fig_num * 3))
+    title = 'lambda_Vh'
+    fig.suptitle(title)
+    for i in range(fig_num):
+        ax1 = fig.add_subplot(fig_num, 1, i+1)
+        ax1.plot(x_h, human_d_list[0].lambda_Vh[i, :], label='human')
+        ax1.plot(x_a, agent_d_list[0].lambda_Vh[i, :], label='agent')
+        ax1.grid()
+        ax1.legend()
+        ax1.set_ylabel(str(i))
+    plt.savefig('{}{}.png'.format(savedir, title))
 
 
-# 角度をプロット
-fig_num = 7
-fig = plt.figure(figsize=(10, fig_num * 2.5))
-title = 'angle'
-#plt.title(title)
-fig.suptitle(title)
-for i in range(fig_num):
-    ax1 = fig.add_subplot(fig_num, 1, i+1)
-    ax1.plot(x_h, human_d_list[0].ts_ori[i, :], label='human')
-    ax1.plot(x_a, agent_d_list[0].ts_ori[i, :], label='agent')
-    ax1.grid()
-    ax1.legend()
-    ax1.set_ylabel(angle_labels[i])
-plt.savefig('{}{}.png'.format(savedir, title))
+    # 角度をプロット
+    fig_num = 7
+    fig = plt.figure(figsize=(10, fig_num * 2.5))
+    title = 'angle'
+    #plt.title(title)
+    fig.suptitle(title)
+    for i in range(fig_num):
+        ax1 = fig.add_subplot(fig_num, 1, i+1)
+        ax1.plot(x_h, human_d_list[0].ts_ori[i, :], label='human')
+        ax1.plot(x_a, agent_d_list[0].ts_ori[i, :], label='agent')
+        ax1.grid()
+        ax1.legend()
+        ax1.set_ylabel(angle_labels[i])
+    plt.savefig('{}{}.png'.format(savedir, title))
 
 
 # ヒューマンの比較
+d_lists = []
+d_labels = []
+coeffs = []
+if human_flag:
+    d_lists.append(human_d_list)
+    d_labels.append('human')
 
-# シナジー 空間
-fig_num = 3
-fig = plt.figure(figsize=(10, fig_num * 3))
-title = 'human_U'
-width = 0.3
-xs = []
-for i in range(len(human_d_list)):
-    xs.append(np.arange(len(angle_labels)) + width*i)
-fig.suptitle(title)
-for i in range(fig_num):
-    ax1 = fig.add_subplot(fig_num, 1, i+1)
-    for j, (x, db) in enumerate(zip(xs, human_d_list)):
-        ax1.bar(x, db.U[:, i], tick_label=angle_labels, width=width, align="center", label=db.name)
-    ax1.grid()
-    ax1.legend()
-    ax1.set_ylabel(str(i))
-plt.savefig('{}{}.png'.format(savedir, title))
+    coeffs.append([[1, 1, 1, 1, 1, 1, 1, 1],
+                   [1, 1, -1, -1, 1, 1, 1, 1],
+                   [1, 1, 1, 1, 1, 1, 1, 1],
+                  ])
+if agent_flag:
+    d_lists.append(agent_d_list)
+    d_labels.append('agent')
 
+for d_list, d_label, coeff in zip(d_lists, d_labels, coeffs):
+    # シナジー 空間
+    fig_num = num_of_synergy
+    fig = plt.figure(figsize=(10, fig_num * 3))
+    plt.subplots_adjust(right=0.75)
+    title = '{}_U'.format(d_label)
+    width = 0.8 / len(d_list)
+    xs = []
+    for i in range(len(d_list)):
+        xs.append(np.arange(len(angle_labels)) + width*i)
+    fig.suptitle(title)
+    for i in range(fig_num):
+        ax1 = fig.add_subplot(fig_num, 1, i+1)
+        for j, (x, db) in enumerate(zip(xs, d_list)):
+            ax1.bar(x, coeff[i][j]*db.U[:, i], tick_label=angle_labels, width=width, align="center", label=db.name)
+        ax1.grid()
+        ax1.legend(bbox_to_anchor=(1.05, 1))
+        ax1.set_ylabel('synergy {}'.format(i+1))
+    plt.savefig('{}{}.png'.format(savedir, title))
 
-# シナジー 時間
-fig_num = 3
-fig = plt.figure(figsize=(10, fig_num * 3))
-title = 'human_lambda_Vh'
-fig.suptitle(title)
-for i in range(fig_num):
-    ax1 = fig.add_subplot(fig_num, 1, i+1)
-    for j, db in enumerate(human_d_list):
-        ax1.plot(db.x, db.lambda_Vh[i, :], label=db.name)
-    ax1.grid()
-    ax1.legend()
-    ax1.set_ylabel(str(i))
-plt.savefig('{}{}.png'.format(savedir, title))
+    # シナジー 時間
+    fig_num = 3
+    fig = plt.figure(figsize=(10, fig_num * 3))
+    plt.subplots_adjust(right=0.75)
+    title = '{}_lambda_Vh'.format(d_label)
+    fig.suptitle(title)
+    for i in range(fig_num):
+        ax1 = fig.add_subplot(fig_num, 1, i+1)
+        for j, db in enumerate(d_list):
+            ax1.plot(db.x, coeff[i][j]*db.lambda_Vh[i, :], label=db.name)
+        ax1.grid()
+        ax1.legend(bbox_to_anchor=(1.05, 1))
+        ax1.set_ylabel('synergy {}'.format(i + 1))
+    plt.savefig('{}{}.png'.format(savedir, title))
 
+    # 角度をプロット
+    fig_num = 7
+    fig = plt.figure(figsize=(10, fig_num * 2.5))
+    plt.subplots_adjust(right=0.75)
+    title = '{}_angle'.format(d_label)
+    #plt.title(title)
+    fig.suptitle(title)
+    for i in range(fig_num):
+        ax1 = fig.add_subplot(fig_num, 1, i+1)
+        for j, db in enumerate(d_list):
+            ax1.plot(db.x, db.ts_ori[i, :], label=db.name)
+        ax1.grid()
+        ax1.legend(bbox_to_anchor=(1.05, 1))
+        ax1.set_ylabel(angle_labels[i])
+    plt.savefig('{}{}.png'.format(savedir, title))
 
-# 角度をプロット
-fig_num = 7
-fig = plt.figure(figsize=(10, fig_num * 2.5))
-title = 'human_angle'
-#plt.title(title)
-fig.suptitle(title)
-for i in range(fig_num):
-    ax1 = fig.add_subplot(fig_num, 1, i+1)
-    for j, db in enumerate(human_d_list):
-        ax1.plot(db.x, db.ts_ori[i, :], label='human1')
-    ax1.grid()
-    ax1.legend()
-    ax1.set_ylabel(angle_labels[i])
-plt.savefig('{}{}.png'.format(savedir, title))
-
+'''
 # エージェント間比較
 coeff = [[-1, -1, 1, 1],
          [1, -1, 1, 1],
@@ -285,6 +352,6 @@ angle_t = np.dot(agent_d_list[0].U[:, 1:2], agent_d_list[0].lambda_Vh[1:2, :])
 synergy_plot(angle_t, 'agent_synergy2')
 angle_t = np.dot(agent_d_list[0].U[:, 2:3], agent_d_list[0].lambda_Vh[2:3, :])
 synergy_plot(angle_t, 'agent_synergy3')
-
+'''
 
 #plt.show()

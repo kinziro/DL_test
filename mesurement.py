@@ -193,6 +193,42 @@ class MyRemodelendEnv(gym.Wrapper):
         return obs, reward, terminal, info
 
 
+def plot_ts(ts, labels, title, plotdir, sampling=0.0166):
+    # 角度をプロット
+    fig_num = ts.shape[0]
+    x = np.arange(ts.shape[1]) * sampling
+    plt.clf()
+    fig = plt.figure(figsize=(len(x) / 20 + 5, fig_num * 2.5))
+    #title = 'angle'
+    #plt.title(title)
+    fig.suptitle(title)
+    for i in range(fig_num):
+        ax1 = fig.add_subplot(fig_num, 1, i+1)
+        ax1.plot(x, ts[i, :])
+        ax1.grid()
+        ax1.set_ylabel(labels[i])
+
+    plt.savefig('{}{}.png'.format(plotdir, title))
+
+def plot_ts2(ts, labels, title, plotdir, sampling=0.0166):
+    # 角度をプロット
+    fig_num = ts.shape[0]
+    x = np.arange(ts.shape[1]) * sampling
+    plt.clf()
+    fig = plt.figure(figsize=(len(x) / 4 + 5, fig_num * 2.5))
+    #title = 'angle'
+    #plt.title(title)
+    fig.suptitle(title)
+    for i in range(fig_num):
+        ax1 = fig.add_subplot(fig_num, 1, i+1)
+        ax1.plot(x, ts[i, :])
+        ax1.grid(which='both', axis='both')
+        ax1.set_ylabel(labels[i])
+
+    plt.savefig('{}{}.png'.format(plotdir, title))
+
+
+
 # 学習設定
 train = False  # 学習をするかどうか
 validation = True  # 学習結果を使って評価をするかどうか
@@ -206,26 +242,29 @@ env = DummyVecEnv([lambda: ori_env])
 # env = SubprocVecEnv([make_env(env_name, i) for i in range(num_cpu)])
 
 env.reset()
-savedir = './stable_baselines/{}/'.format(env_name)
+modeldir = './stable_baselines/{}/'.format(env_name)
 test_env = gym.make(env_name)
 test_env = MyRemodelendEnv(test_env)
 # test_env = DummyVecEnv([lambda: test_env])
 
-plotdir = './testplot/'
-os.makedirs(plotdir, exist_ok=True)
+savedir = './synergy/agent/'
+os.makedirs(savedir, exist_ok=True)
 data = None
 right_x = None
 right_z = None
 left_x = None
 left_z = None
 angle_t = None
-step_len = 500
+obs_t = None
+action_t = None
+parts_z_t = None
+step_len = 180
 
 # 学習結果の確認
 if validation:
-    model = PPO2.load('{}ppo2_model'.format(savedir))
+    model = PPO2.load('{}ppo2_model'.format(modeldir))
     from gym import wrappers
-    video_path = '{}video'.format(plotdir)
+    video_path = '{}video'.format(savedir)
     wrap_env = wrappers.Monitor(test_env, video_path, force=True)
     # wrap_env = wrappers.Monitor(ori_env, video_path, force=True)
 
@@ -247,29 +286,24 @@ if validation:
         # obs, rewards, done, info = test_env.step(action)
         obs, rewards, done, info = wrap_env.step(action)
 
-        '''
-        ori_state = test_env.origin_state
-        #ori_state = test_env.envs[0].origin_state
-        #ori_state = wrap_env.origin_state
-
-        if data is None:
-            data = np.array(ori_state).reshape(-1, 1)
-        else:
-            data = np.hstack([data, np.array(ori_state).reshape(-1, 1)])
-        '''
-
-        body_posi = test_env.get_right_parts_posi()
-        body_posi_l = test_env.get_left_parts_posi()
+        # データの加工
+        parts_posi = test_env.get_parts_posi()
 
         angles, angle_labels = test_env.get_motion_angle()
-        angles.extend(obs[20:])
-        angles.extend(body_posi[2, 5:])
-        angles.extend(body_posi_l[2, 5:])
         angles = np.array(angles).reshape(-1, 1)
+        obses = np.array(obs).reshape(-1, 1)
+        parts_z = np.array(parts_posi[2, :]).reshape(-1 ,1)
+        actions = np.array(action).reshape(-1, 1)
         if angle_t is None:
             angle_t = angles
+            obs_t = obses
+            parts_z_t = parts_z
+            action_t = actions
         else:
             angle_t = np.hstack([angle_t, angles])
+            obs_t = np.hstack([obs_t, obses])
+            parts_z_t = np.hstack([parts_z_t, parts_z])
+            action_t = np.hstack([action_t, actions])
 
         if step % 20 == 0:
             body_posi = test_env.get_right_parts_posi()
@@ -298,29 +332,27 @@ if validation:
 
     plt.grid()
     title = 'walker'
-    plt.savefig('{}{}.png'.format(plotdir, title))
+    plt.savefig('{}{}.png'.format(savedir, title))
     # np.save('./walker2d_status', np.array(data))
     # np.save('./humanoid_status', np.array(data))
     # labels = np.load('./labels.npy')
 
-    np.save('{}angle_t'.format(plotdir), angle_t)
-    angle_labels.extend(['feet_contact_r', 'feet_contact_l', 'foot_joint_z', 'foot_z', 'foot_left_joint_z', 'foot_left_z'])
+    np.save('{}angle_t'.format(savedir), angle_t)
+    np.save('{}obs_t'.format(savedir), obs_t)
+    np.save('{}parts_z_t'.format(savedir), parts_z_t)
+    np.save('{}action_t'.format(savedir), action_t)
+    #angle_labels.extend(['feet_contact_r', 'feet_contact_l', 'foot_joint_z', 'foot_z', 'foot_left_joint_z', 'foot_left_z'])
 
     # 角度をプロット
-    fig_num = 13
-    x = np.arange(angle_t.shape[1]) * 0.0166
-    plt.clf()
-    fig = plt.figure(figsize=(len(x) / 20 + 5, fig_num * 2.5))
-    title = 'angle'
-    #plt.title(title)
-    fig.suptitle(title)
-    for i in range(fig_num):
-        ax1 = fig.add_subplot(fig_num, 1, i+1)
-        ax1.plot(x, angle_t[i, :])
-        ax1.grid()
-        ax1.set_ylabel(angle_labels[i])
+    plot_ts(ts=angle_t, labels=angle_labels, title='angle', plotdir=savedir)
+    # パーツのz座標をプロット
+    plot_ts(ts=parts_z_t, labels=test_env.parts_name, title='parts_z', plotdir=savedir)
 
-    plt.savefig('{}{}.png'.format(plotdir, title))
+    # 右足歩行開始点確認用プロット
+    right_t = np.vstack([parts_z_t[5:7, :], obs_t[20:22, :]])
+    right_labels = test_env.parts_name[5:7]
+    right_labels.extend(['contact_r', 'contact_l'])
+    plot_ts2(ts=right_t, labels=right_labels, title='right_data', plotdir=savedir, sampling=1)
 
     '''
     np.save('./walker2d_status', np.array(data))
