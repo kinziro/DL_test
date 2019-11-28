@@ -44,12 +44,14 @@ class MyRemodelendEnv(gym.Wrapper):
         super().__init__(env)
 
         self.env.reset()
+        self.action_name = []
         self.status_name = ['z-self.initial_z', 'np.sin_self.angel_to_target', 'np.cos_self.angel_to_target',
                             '0.3vx', '0.3vy', '0.3vz', 'r', 'p']
 
         for jnt in self.env.ordered_joints:
             self.status_name.append('{}_p'.format(jnt.joint_name))
             self.status_name.append('{}_v'.format(jnt.joint_name))
+            self.action_name.append(jnt.joint_name)
 
         self.status_name.extend(['feet_contact_0_r', 'feet_contact_1_l'])
         np.save('./labels', np.array(self.status_name))
@@ -215,15 +217,16 @@ def plot_ts2(ts, labels, title, plotdir, sampling=0.0166):
     fig_num = ts.shape[0]
     x = np.arange(ts.shape[1]) * sampling
     plt.clf()
-    fig = plt.figure(figsize=(len(x) / 4 + 5, fig_num * 2.5))
+    fig = plt.figure(figsize=(len(x) / 3 + 5, fig_num * 2.5))
     #title = 'angle'
     #plt.title(title)
     fig.suptitle(title)
     for i in range(fig_num):
         ax1 = fig.add_subplot(fig_num, 1, i+1)
         ax1.plot(x, ts[i, :])
-        ax1.grid(which='both', axis='both')
+        ax1.grid()
         ax1.set_ylabel(labels[i])
+        ax1.set_xticks(list(range(0, 181, 1)))
 
     plt.savefig('{}{}.png'.format(plotdir, title))
 
@@ -247,7 +250,7 @@ test_env = gym.make(env_name)
 test_env = MyRemodelendEnv(test_env)
 # test_env = DummyVecEnv([lambda: test_env])
 
-savedir = './synergy/agent/'
+savedir = './synergy/agent/0/'
 os.makedirs(savedir, exist_ok=True)
 data = None
 right_x = None
@@ -347,6 +350,10 @@ if validation:
     plot_ts(ts=angle_t, labels=angle_labels, title='angle', plotdir=savedir)
     # パーツのz座標をプロット
     plot_ts(ts=parts_z_t, labels=test_env.parts_name, title='parts_z', plotdir=savedir)
+    # 行動をプロット
+    plot_ts(ts=action_t, labels=test_env.action_name, title='actions', plotdir=savedir)
+    # 状態をプロット
+    plot_ts(ts=obs_t, labels=test_env.status_name, title='status', plotdir=savedir)
 
     # 右足歩行開始点確認用プロット
     right_t = np.vstack([parts_z_t[5:7, :], obs_t[20:22, :]])
