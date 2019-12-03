@@ -78,6 +78,7 @@ def to_csv_cos_sim(label, d_list1, coeff1, d_list2=None, coeff2=None):
         d_list2 = d_list1
         coeff2 = coeff1
 
+    mins = []
     for rank in range(3):
         index = []
         columns = []
@@ -92,6 +93,9 @@ def to_csv_cos_sim(label, d_list1, coeff1, d_list2=None, coeff2=None):
             cos_sims.append(row_sims)
         cos_sims = np.array(cos_sims)
         pd.DataFrame(cos_sims, index=index, columns=columns).to_csv('{}{}_cos_sim_{}.csv'.format(savedir, label, rank+1))
+        mins.append(np.min(np.abs(cos_sims)))
+
+    pd.DataFrame(mins, index=['synergy1', 'synergy2', 'synergy3']).to_csv('{}{}_min_cos_sim.csv'.format(savedir, label))
 
 
 def plot_synergy(label, d_list, coeff):
@@ -169,8 +173,9 @@ columns = []
 if human_flag:
     humanbasedir = '{}human/'.format(basedir)
     hns = ['ActorA_Walk', 'ActorE_Walk', 'ActorG_Walk', 'ActorI_Walk']
+    hls = ['humanA', 'humanB', 'humanC', 'humanD']
     hA_cut_list = [[10, 40],
-                  [40, 69]]
+                   [40, 69]]
     hE_cut_list = [[7, 31],
                    [31, 54]]
     hG_cut_list = [[10, 36],
@@ -179,12 +184,12 @@ if human_flag:
                    [31, 54]]
 
     human_d_list = []
-    for hn, h_cut_list in zip(hns, [hA_cut_list, hE_cut_list, hG_cut_list, hI_cut_list]):
+    for hn, hl, h_cut_list in zip(hns, hls, [hA_cut_list, hE_cut_list, hG_cut_list, hI_cut_list]):
         human_d = np.load('{}{}/angle_t.npy'.format(humanbasedir, hn))
 
         for i, c in enumerate(h_cut_list):
             ts = human_d[:7, c[0]:c[1]]
-            human_d_list.append(DataBox(ts, rank=num_of_synergy, name='{}_{}'.format(hn, i+1)))
+            human_d_list.append(DataBox(ts, rank=num_of_synergy, name='{}_{}'.format(hl, i+1)))
             contributions.append(human_d_list[-1].contribution())
             columns.append(human_d_list[-1].name)
 
@@ -196,18 +201,15 @@ if human_flag:
 # エージェント
 if agent_flag:
     datadir = '{}agent/'.format(basedir)
-    #a_cut_list = [[110, 166],
-    #              [165, 219],
-    #              [218, 281],
-    #              [280, 339]]
-    aA_cut_list = [[61, 109],
-                  [109, 163]]
-    aB_cut_list = [[53, 102],
-                   [102, 158]]
-    aC_cut_list = [[60, 113],
-                   [113, 165]]
-    aD_cut_list = [[58, 107],
-                   [107, 169]]
+
+    aA_cut_list = [[64, 117],
+                   [117, 168]]
+    aB_cut_list = [[59, 110],
+                   [110, 162]]
+    aC_cut_list = [[52, 111],
+                   [111, 162]]
+    aD_cut_list = [[60, 108],
+                   [108, 158]]
     agent_d_list = []
     for l, a_cut_list in zip(['A', 'B', 'C', 'D'], [aA_cut_list, aB_cut_list, aC_cut_list, aD_cut_list]):
         agent_d = np.load('{}{}/angle_t.npy'.format(datadir, l))
@@ -218,10 +220,89 @@ if agent_flag:
             contributions.append(agent_d_list[-1].contribution())
             columns.append(agent_d_list[-1].name)
 
-    agent_coeff = [[-1, 1, 1, 1, 1, 1, 1, 1],
-                   [1, -1, -1, -1, -1, 1, -1, 1],
-                   [1, 1, 1, 1, 1, 1, 1, -1],
-                  ]
+    agent_coeff = [[1, 1, 1, 1, 1, 1, 1, 1],
+                   [1, -1, 1, -1, 1, -1, -1, -1],
+                   [1, 1, 1, 1, 1, 1, 1, 1],
+                   ]
+# 同一エージェントの長時間
+if agent_flag:
+    datadir = '{}agent/'.format(basedir)
+
+    aA_long_cut_list = [[69, 122],
+                        [122, 174],
+                        [174, 226],
+                        [226, 287],
+                        [287, 338],
+                        [338, 393],
+                        [393, 452],
+                        [452, 497],
+                        ]
+
+    agent_long_d_list = []
+    agent_long_d = np.load('{}A_long/angle_t.npy'.format(datadir))
+
+    for i, c in enumerate(aA_long_cut_list):
+        ts = agent_long_d[:7, c[0]:c[1]]
+        agent_long_d_list.append(DataBox(ts, rank=num_of_synergy, name='agentA_{}'.format(i+1)))
+        contributions.append(agent_long_d_list[-1].contribution())
+        columns.append(agent_long_d_list[-1].name)
+
+    agent_long_coeff = [[1, 1, 1, 1, -1, 1, -1, -1],
+                        [-1, 1, -1, -1, -1, -1, 1, 1],
+                        [1, -1, 1, 1, 1, 1, 1, 1],
+                        ]
+
+# 失敗したエージェント
+if agent_flag:
+    datadir = '{}agent/'.format(basedir)
+
+    a_FailB_cut_list = [[10, 70],
+                        [70, 130],
+                        [130, 190],
+                        [190, 250],
+                        [250, 310],
+                        [310, 370],
+                        [370, 430],
+                        [430, 490],
+                        ]
+
+    agent_FailB_d_list = []
+    agent_FailB_d = np.load('{}FailB/angle_t.npy'.format(datadir))
+
+    for i, c in enumerate(a_FailB_cut_list):
+        ts = agent_FailB_d[:7, c[0]:c[1]]
+        agent_FailB_d_list.append(DataBox(ts, rank=num_of_synergy, name='agent_FailB_{}'.format(i+1)))
+        contributions.append(agent_FailB_d_list[-1].contribution())
+        columns.append(agent_FailB_d_list[-1].name)
+
+    agent_FailB_coeff = [[1, 1, 1, 1, 1, 1, 1, 1],
+                         [1, 1, 1, 1, 1, 1, 1, 1],
+                         [1, 1, 1, 1, 1, 1, 1, 1],
+                         ]
+
+# 1e7エージェント
+if agent_flag:
+    datadir = '{}agent/'.format(basedir)
+
+    a_1e7_cut_list = [[6, 35]
+                       ]
+
+    agent_1e7_d_list = []
+    agent_1e7_d = np.load('{}1e7/angle_t.npy'.format(datadir))
+
+    for i, c in enumerate(a_1e7_cut_list):
+        ts = agent_1e7_d[:7, c[0]:c[1]]
+        agent_1e7_d_list.append(DataBox(ts, rank=num_of_synergy, name='agent_1e7_{}'.format(i+1)))
+        contributions.append(agent_1e7_d_list[-1].contribution())
+        columns.append(agent_1e7_d_list[-1].name)
+
+    agent_1e7_coeff = [[1],
+                       [-1],
+                       [-1],
+                       ]
+
+
+
 
 # 寄与度の保存
 contributions = np.array(contributions).T
@@ -231,58 +312,9 @@ pd.DataFrame(contributions, columns=columns).to_csv('{}contributions.csv'.format
 to_csv_cos_sim('human', d_list1=human_d_list, coeff1=human_coeff)
 to_csv_cos_sim('agent', d_list1=agent_d_list, coeff1=agent_coeff)
 to_csv_cos_sim('h_vs_a', d_list1=human_d_list, coeff1=human_coeff, d_list2=agent_d_list, coeff2=agent_coeff)
-
-# 人とエージェントの比較
-if human_flag and agent_flag:
-    # シナジー 空間
-    fig_num = 3
-    fig = plt.figure(figsize=(10, fig_num * 3))
-    title = 'U'
-    width = 0.3
-    x_h = np.arange(len(angle_labels))
-    x_a = np.arange(len(angle_labels)) + width
-    fig.suptitle(title)
-    for i in range(fig_num):
-        ax1 = fig.add_subplot(fig_num, 1, i+1)
-        ax1.bar(x_h, human_d_list[0].U[:, i], tick_label=angle_labels, width=width, align="center", label='human')
-        ax1.bar(x_a, agent_d_list[0].U[:, i], tick_label=angle_labels, width=width, align="center", label='agent')
-        ax1.grid()
-        ax1.legend()
-        ax1.set_ylabel(str(i))
-    plt.savefig('{}{}.png'.format(savedir, title))
-
-    # シナジー 時間
-    x_h = human_d_list[0].x
-    x_a = agent_d_list[0].x
-
-    fig_num = 3
-    fig = plt.figure(figsize=(10, fig_num * 3))
-    title = 'lambda_Vh'
-    fig.suptitle(title)
-    for i in range(fig_num):
-        ax1 = fig.add_subplot(fig_num, 1, i+1)
-        ax1.plot(x_h, human_d_list[0].lambda_Vh[i, :], label='human')
-        ax1.plot(x_a, agent_d_list[0].lambda_Vh[i, :], label='agent')
-        ax1.grid()
-        ax1.legend()
-        ax1.set_ylabel(str(i))
-    plt.savefig('{}{}.png'.format(savedir, title))
-
-
-    # 角度をプロット
-    fig_num = 7
-    fig = plt.figure(figsize=(10, fig_num * 2.5))
-    title = 'angle'
-    #plt.title(title)
-    fig.suptitle(title)
-    for i in range(fig_num):
-        ax1 = fig.add_subplot(fig_num, 1, i+1)
-        ax1.plot(x_h, human_d_list[0].ts_ori[i, :], label='human')
-        ax1.plot(x_a, agent_d_list[0].ts_ori[i, :], label='agent')
-        ax1.grid()
-        ax1.legend()
-        ax1.set_ylabel(angle_labels[i])
-    plt.savefig('{}{}.png'.format(savedir, title))
+to_csv_cos_sim('agentA_only', d_list1=agent_long_d_list, coeff1=agent_long_coeff)
+to_csv_cos_sim('agent_FailB', d_list1=agent_FailB_d_list, coeff1=agent_FailB_coeff)
+to_csv_cos_sim('agent_1e7', d_list1=agent_1e7_d_list, coeff1=agent_1e7_coeff, d_list2=agent_d_list, coeff2=agent_coeff)
 
 # ヒューマン, エージェントそれぞれ同士の比較
 mix_d_list = [human_d_list[0]]
@@ -292,4 +324,12 @@ mix_coeff = np.hstack([mix_coeff, np.array(agent_coeff)])
 plot_synergy(label='human', d_list=human_d_list, coeff=human_coeff)
 plot_synergy(label='agent', d_list=agent_d_list, coeff=agent_coeff)
 plot_synergy(label='h_vs_a', d_list=mix_d_list, coeff=mix_coeff)
+plot_synergy(label='agentA_only', d_list=agent_long_d_list, coeff=agent_long_coeff)
+plot_synergy(label='human_A', d_list=[human_d_list[0]], coeff=[[1], [1], [1]])
+plot_synergy(label='agent_FailB', d_list=agent_FailB_d_list, coeff=agent_FailB_coeff)
 
+mix_d_list = [agent_d_list[0]]
+mix_d_list.extend(agent_1e7_d_list)
+mix_coeff = np.array(agent_coeff)[:, 0:1]
+mix_coeff = np.hstack([mix_coeff, np.array(agent_1e7_coeff)])
+plot_synergy(label='8_vs_7', d_list=mix_d_list, coeff=mix_coeff)

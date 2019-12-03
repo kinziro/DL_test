@@ -1,5 +1,6 @@
 import numpy as np
-import gym, roboschool
+#import gym, roboschool
+import gym, pybullet_envs
 import os
 import time
 from datetime import datetime
@@ -33,13 +34,14 @@ def make_env(env_name, rank, seed=0):
 
 
 # 学習設定
-train = True       # 学習をするかどうか
+train = False       # 学習をするかどうか
 validation = True   # 学習結果を使って評価をするかどうか
 
 #env_name = 'RoboschoolHumanoid-v1'
-env_name = 'RoboschoolWalker2d-v1'
+#env_name = 'RoboschoolWalker2d-v1'
+env_name = 'Walker2DBulletEnv-v0'
 num_cpu = 2         # 学習に使用するCPU数
-learn_timesteps = 10**6     # 学習タイムステップ
+learn_timesteps = 10**5     # 学習タイムステップ
 
 ori_env = gym.make(env_name)
 #env = DummyVecEnv([lambda: ori_env])
@@ -73,7 +75,7 @@ if validation:
     done = False
     obs = wrap_env.reset()
 
-    for step in range(10000):
+    for step in range(200):
         if step % 10 == 0: print("step :", step)
         if done:
             time.sleep(1)
